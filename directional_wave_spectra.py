@@ -26,38 +26,135 @@ References:
 """
 
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import root
+from numba import njit
+import typing
 
 # Entry Function
 # =============================================================================
-def mem_distribution(theta, lambdas):
-    N = len(lambdas) // 2
-    lambda_cos = lambdas[:N]
-    lambda_sin = lambdas[N:]
-    exponent = sum(
-        lambda_cos[n] * np.cos((n + 1) * theta) +
-        lambda_sin[n] * np.sin((n + 1) * theta)
-        for n in range(N)
-    )
-    unnormalized = np.exp(exponent)
-    return unnormalized / np.trapz(unnormalized, theta)
 
-# Objective function for optimization
-def mem_objective(lambdas, theta, target_moments):
-    N = len(target_moments) // 2
-    D = mem_distribution(theta, lambdas)
-    moments = []
-    for n in range(1, N + 1):
-        moments.append(np.trapz(D * np.cos(n * theta), theta))  # a_n
-        moments.append(np.trapz(D * np.sin(n * theta), theta))  # b_n
-    return np.sum((np.array(moments) - np.array(target_moments))**2)
+@njit(fastmath=True)
+def mem2_directional_distribution(
+    lagrange_multiplier,
+    direction_increment,
+    twiddle_factors,
+) -> np.ndarray:
+    """
+    Given the solution for the Lagrange multipliers- reconstruct the directional
+    distribution.
+    :param lagrange_multiplier: the lagrange multipliers
+    :param twiddle_factors: [sin theta, cost theta, sin 2*theta, cos 2*theta] as a 4 by ndir array
+    :param direction_increment: directional stepsize used in the integration, nd-array
+    :return: Directional distribution array as a function of directions
+    """
+    inner_product = np.zeros(twiddle_factors.shape[1])
+    for jj in range(0, 4):
+        inner_product = inner_product + lagrange_multiplier[jj] * twiddle_factors[jj, :]
+
+    inner_product = inner_product - np.min(inner_product)
+
+    normalization = 1 / np.sum(np.exp(-inner_product) * direction_increment)
+    return np.exp(-inner_product) * normalization
+
+def get_direction_increment(directions_radians: np.ndarray) -> np.ndarray:
+
+    # Calculate the forward difference appending the first entry to the back
+    # of the array. Use modular trickery to ensure the angle is in [-pi,pi]
+    forward_diff = (
+        np.diff(directions_radians, append=directions_radians[0]) + np.pi
+    ) % (2 * np.pi) - np.pi
+
+    # Calculate the backward difference prepending the last entry to the front
+    # of the array. Use modular trickery to ensure the angle is in [-pi,pi]
+    backward_diff = (
+        np.diff(directions_radians, prepend=directions_radians[-1]) + np.pi
+    ) % (2 * np.pi) - np.pi
+
+    # The interval we are interested in is the average of the forward and backward
+    # differences.
+    return (forward_diff + backward_diff) / 2
+
+def initial_value(a1: np.ndarray, b1: np.ndarray, a2: np.ndarray, b2: np.ndarray):
+    guess = np.empty((*a1.shape, 4))
+    fac = 1 + a1**2 + b1**2 + a2**2 + b2**2
+    guess[..., 0] = 2 * a1 * a2 + 2 * b1 * b2 - 2 * a1 * fac
+    guess[..., 1] = 2 * a1 * b2 - 2 * b1 * a2 - 2 * b1 * fac
+    guess[..., 2] = a1**2 - b1**2 - 2 * a2 * fac
+    guess[..., 3] = 2 * a1 * b1 - 2 * b2 * fac
+    return guess
+
+@njit(fastmath=True)
+def moment_constraints(lambdas, twiddle_factors, moments, direction_increment):
+    # Get the current estimate of the directional distribution
+    dist = mem2_directional_distribution(lambdas, direction_increment, twiddle_factors)
+    out = np.zeros(4)
+    for mm in range(0, 4):
+        # note - the part after the "-" is just a discrete approximation of the Fourier sine/cosine amplitude (moment)
+        out[mm] = moments[mm] - np.sum(
+            (twiddle_factors[mm, :]) * dist * direction_increment
+        )
+
+    return out
+
+def root_finder(
+    directions_radians: np.ndarray,
+    a1: typing.Union[np.ndarray, float],
+    b1: typing.Union[np.ndarray, float],
+    a2: typing.Union[np.ndarray, float],
+    b2: typing.Union[np.ndarray, float],
+) -> np.ndarray:
+
+    number_of_frequencies = a1.shape[-1]
+    number_of_points = a1.shape[0]
+
+    directional_distribution = np.zeros(
+        (number_of_points, number_of_frequencies, len(directions_radians))
+    )
+
+    direction_increment = get_direction_increment(directions_radians)
+
+    twiddle_factors = np.empty((4, len(directions_radians)))
+    twiddle_factors[0, :] = np.cos(directions_radians)
+    twiddle_factors[1, :] = np.sin(directions_radians)
+    twiddle_factors[2, :] = np.cos(2 * directions_radians)
+    twiddle_factors[3, :] = np.sin(2 * directions_radians)
+
+    guess = initial_value(a1, b1, a2, b2)
+    for ipoint in range(0, number_of_points):
+        for ifreq in range(0, number_of_frequencies):
+
+            moments = np.array(
+                [
+                    a1[ipoint, ifreq],
+                    b1[ipoint, ifreq],
+                    a2[ipoint, ifreq],
+                    b2[ipoint, ifreq],
+                ]
+            )
+
+            if np.any(np.isnan(guess[ipoint, ifreq, :])):
+                continue
+
+            res = root(
+                moment_constraints,
+                guess[ipoint, ifreq, :],
+                args=(twiddle_factors, moments, direction_increment),
+                method="lm",
+            )
+            lambdas = res.x
+
+            directional_distribution[ipoint, ifreq, :] = mem2_directional_distribution(
+                lambdas, direction_increment, twiddle_factors
+            )
+
+    return directional_distribution
 
 
 """
 Estimate
 ======================
 Main module for estimating directional spectra from directional moments. Core functionality is provided by the
-`estimate_directional_spectrum_from_moments` function.
+`estimate_directional_spectrum` function.
 """
 def estimate_directional_spectrum(
     e: np.ndarray,
@@ -68,60 +165,21 @@ def estimate_directional_spectrum(
     direction: np.ndarray,
 ) -> np.ndarray:
     """
-    Construct a 2D directional energy spectrum based on the directional moments and a specified spectral reconstruction
-    method.
 
-    :param e: nd array of variance/energy density as a function of frequency. The trailing dimension is assumed to be
-    the frequency dimension.
-
-    :param a1: nd array of cosine directional moment as function of frequency. The trailing dimension is assumed to be
-    the frequency dimension.
-
-    :param b1: nd array of sine directional moment as function of frequency. The trailing dimension is assumed to be
-    the frequency dimension.
-
-    :param a2: nd array of double angle cosine directional moment as function
-    of frequency. The trailing dimension is assumed to be the frequency dimension.
-
-    :param b2: nd array of double angle sine directional moment as function of
-    frequency, The trailing dimension is assumed to be the frequency dimension.
-
-    :param direction: 1d array of wave directions in radians. Directional convention is the same as associated with
-    the Fourier moments (typically going to, anti-clockswise from east).
-
-    :return: numpy.ndarray of shape (..., number_of_directions) containing the directional energy spectrum
-
-    REFERENCES:
-    Benoit, M. (1993). Practical comparative performance survey of methods
-        used for estimating directional wave spectra from heave-pitch-roll data.
-        In Coastal Engineering 1992 (pp. 62-75).
-
-    Lygre, A., & Krogstad, H. E. (1986). Maximum entropy estimation of the
-        directional distribution in ocean wave spectra.
-        Journal of Physical Oceanography, 16(12), 2052-2060.
     """
     # convert degrees to radians
     direction_radians = np.deg2rad(direction)
 
-    ndirs = len(direction)
-    nfreqs = e.shape[-1]
+    output_shape = list(a1.shape) + [len(direction)]
+    if a1.ndim == 1:
+        input_shape = [1, a1.shape[-1]]
+    else:
+        input_shape = [np.prod(a1.shape[0:-1]), a1.shape[-1]]
 
-    # Preallocate result: shape (nfreqs, n_dirs)
-    D = np.zeros((nfreqs, ndirs))
+    a1 = a1.reshape(input_shape)
+    b1 = b1.reshape(input_shape)
+    a2 = a2.reshape(input_shape)
+    b2 = b2.reshape(input_shape)
+    D = root_finder(direction_radians, a1, b1, a2, b2)
 
-    n_order = 2
-    a_moments = np.array([a1, a2]).T
-    b_moments = np.array([b1, b2]).T
-    # Loop over each frequency
-    for i in range(nfreqs):
-        target_moments = []
-        for n in range(n_order):
-            target_moments.append(a_moments[i, n])
-            target_moments.append(b_moments[i, n])
-
-        init_guess = np.zeros(len(target_moments))  # initial guess for optimization
-        res = minimize(mem_objective, init_guess, args=(direction_radians, target_moments), method='BFGS')
-
-        D[i, :] = mem_distribution(direction_radians, res.x)
-
-    return D * (np.pi / 180) * e[..., None]
+    return D.reshape(output_shape) * (np.pi / 180) * e[..., None]
