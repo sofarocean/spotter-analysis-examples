@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wave_signal_processing"
+version = "0.1.0"
+description = "Reusable utility functions for internal projects"
+readme = "README.md"
+requires-python = ">=3.8"
+
+authors = [
+  { name = "Anna Savage", email = "anna.savage@sofarocean.com" }
+]
+
+license = { text = "MIT" }
+
+[project.urls]
+Homepage = "https://github.com/sofarocean/spotter_analysis_examples/wave_signal_processing"
+Repository = "https://github.com/sofarocean/spotter_analysis_examples/wave_signal_processing"
+Issues = "https://github.com/sofarocean/spotter_analysis_examples/wave_wignal_processing/issues"
+
+[tool.setuptools.packages.find]
+# Enables automatic inclusion of your package
+where = ["."]
+
+

@@ -1,6 +1,6 @@
 import numpy as np
 from dataclasses import dataclass, field
-from wspp.spectral_analysis import Spectrum
+from wave_signal_processing.spectral_analysis import Spectrum
 from typing import Union
 
 @dataclass
