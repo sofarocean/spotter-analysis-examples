@@ -390,6 +390,8 @@ def compute_full_spectra_from_displacement(
 
     if spectrum.ezz.ndim == 1: #TODO tomorrow Anna, fix for multidimensional spectra
         spectrum.time = disp.time[-1]
+    else:
+        spectrum.time = disp.time[int(segment_length_seconds*fs):-1:int(segment_length_seconds*fs)]
 
     return spectrum
 
