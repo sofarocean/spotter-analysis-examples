@@ -5,6 +5,7 @@ from typing import Union
 
 @dataclass
 class BulkParameters:
+    time: np.ndarray = field(default_factory=lambda: np.array([]))
     significant_wave_height: np.ndarray = field(default_factory=lambda: np.array([]))
     mean_period: np.ndarray = field(default_factory=lambda: np.array([]))
     mean_direction: np.ndarray = field(default_factory=lambda: np.array([]))
@@ -114,6 +115,7 @@ def peak_directional_spreading(spectrum: Spectrum) -> Union[np.ndarray, float]:
 def compute_bulk_parameters(spectrum: Spectrum) -> BulkParameters:
 
     return BulkParameters(
+        time=spectrum.time,
         significant_wave_height = significant_wave_height(spectrum),
         mean_period = mean_period(spectrum),
         mean_direction = mean_direction(spectrum),
