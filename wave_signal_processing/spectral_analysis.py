@@ -301,12 +301,12 @@ def root_finder(
 
     twiddle_factors = np.empty((4, len(directions_radians)))
 
-    phi = (3 * np.pi / 2) - directions_radians  # phi = 270° - theta, in radians
+    phi = (3 * np.pi / 2) - directions_radians  # uses meteorological directional convention
 
-    twiddle_factors[0, :] = np.cos(phi)  # corresponds to a1
-    twiddle_factors[1, :] = np.sin(phi)  # corresponds to b1
-    twiddle_factors[2, :] = np.cos(2 * phi)  # corresponds to a2
-    twiddle_factors[3, :] = np.sin(2 * phi)  # corresponds to b2
+    twiddle_factors[0, :] = np.cos(phi)
+    twiddle_factors[1, :] = np.sin(phi)
+    twiddle_factors[2, :] = np.cos(2 * phi)
+    twiddle_factors[3, :] = np.sin(2 * phi)  
 
     guess = initial_value(moments)
     for ipoint in range(0, number_of_points):
