@@ -300,10 +300,13 @@ def root_finder(
     direction_increment = get_direction_increment(directions_radians)
 
     twiddle_factors = np.empty((4, len(directions_radians)))
-    twiddle_factors[0, :] = np.cos(directions_radians)
-    twiddle_factors[1, :] = np.sin(directions_radians)
-    twiddle_factors[2, :] = np.cos(2 * directions_radians)
-    twiddle_factors[3, :] = np.sin(2 * directions_radians)
+
+    phi = (3 * np.pi / 2) - directions_radians  # phi = 270° - theta, in radians
+
+    twiddle_factors[0, :] = np.cos(phi)  # corresponds to a1
+    twiddle_factors[1, :] = np.sin(phi)  # corresponds to b1
+    twiddle_factors[2, :] = np.cos(2 * phi)  # corresponds to a2
+    twiddle_factors[3, :] = np.sin(2 * phi)  # corresponds to b2
 
     guess = initial_value(moments)
     for ipoint in range(0, number_of_points):
