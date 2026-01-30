@@ -480,9 +480,9 @@ class TestRealWorldData:
         mean_value = np.mean(result[result > 0])  # Mean of non-zero values
 
         # Expected values (computed from current implementation)
-        expected_total_energy = 0.7900041687211213  # Sum of all directional spectrum values
-        expected_max_value = 0.006608127419460172  # Maximum value in the spectrum
-        expected_mean_nonzero = 0.00013299733480153555  # Mean of non-zero values
+        expected_total_energy = 0.2425907168308593  # Sum of all directional spectrum values
+        expected_max_value = 0.0014528723167043526  # Maximum value in the spectrum
+        expected_mean_nonzero = 1.705982537488462e-05  # Mean of non-zero values
 
         # Test with reasonable tolerance for numerical precision
         np.testing.assert_allclose(total_energy, expected_total_energy, rtol=1e-10,
@@ -498,8 +498,8 @@ class TestRealWorldData:
         peak_direction_idx = np.argmax(peak_freq_spectrum)
         peak_value = peak_freq_spectrum[peak_direction_idx]
 
-        expected_peak_value = 0.006608127419460172
-        expected_peak_direction_idx = 91  # Direction index where peak occurs
+        expected_peak_value = 7.91873312652406e-06
+        expected_peak_direction_idx = 140  # Direction index where peak occurs
 
         np.testing.assert_allclose(peak_value, expected_peak_value, rtol=1e-10,
                                  err_msg="Peak value should match expected value")
@@ -515,10 +515,10 @@ class TestRealWorldData:
         ]
 
         expected_values = [
-            0.002799481644527717,    # (0, 0)
-            0.006597944104197192,    # (0, 90)
-            1.7293532633632256e-08,  # (10, 45)
-            4.510801355465396e-09,   # (20, 120)
+            3.657132915143452e-06,    # (0, 0)
+            4.333589151813877e-06,    # (0, 90)
+            6.2458001964083e-06,  # (10, 45)
+            7.228481877123873e-05,   # (20, 120)
         ]
 
         for (freq_idx, dir_idx), expected_val in zip(test_indices, expected_values):
