@@ -306,7 +306,7 @@ def root_finder(
     twiddle_factors[0, :] = np.cos(phi)
     twiddle_factors[1, :] = np.sin(phi)
     twiddle_factors[2, :] = np.cos(2 * phi)
-    twiddle_factors[3, :] = np.sin(2 * phi)  
+    twiddle_factors[3, :] = np.sin(2 * phi)
 
     guess = initial_value(moments)
     for ipoint in range(0, number_of_points):
