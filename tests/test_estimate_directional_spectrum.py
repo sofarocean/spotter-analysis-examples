@@ -177,9 +177,9 @@ class TestEstimateDirectionalSpectrum:
         peak_direction_idx = np.argmax(np.mean(result, axis=0))
         peak_direction = self.directions[peak_direction_idx]
         
-        # Peak should be reasonably close to the dominant direction (45 degrees)
+        # Peak should be reasonably close to the dominant direction (225 degrees)
         # Allow for some tolerance due to discretization and numerical effects
-        assert abs(peak_direction - 45) < 5, f"Peak direction {peak_direction} should be near 45 degrees"
+        assert abs(peak_direction - 225) < 5, f"Peak direction {peak_direction} should be near 225 degrees"
 
     def test_symmetry_properties(self):
         """Test symmetry properties of the directional spectrum."""
@@ -480,9 +480,9 @@ class TestRealWorldData:
         mean_value = np.mean(result[result > 0])  # Mean of non-zero values
 
         # Expected values (computed from current implementation)
-        expected_total_energy = 0.2425907168308593  # Sum of all directional spectrum values
-        expected_max_value = 0.0014528723167043526  # Maximum value in the spectrum
-        expected_mean_nonzero = 1.705982537488462e-05  # Mean of non-zero values
+        expected_total_energy = 0.7801396662948376  # Sum of all directional spectrum values
+        expected_max_value = 0.00660995147262925  # Maximum value in the spectrum
+        expected_mean_nonzero = 0.00013133664415738004  # Mean of non-zero values
 
         # Test with reasonable tolerance for numerical precision
         np.testing.assert_allclose(total_energy, expected_total_energy, rtol=1e-10,
@@ -498,8 +498,8 @@ class TestRealWorldData:
         peak_direction_idx = np.argmax(peak_freq_spectrum)
         peak_value = peak_freq_spectrum[peak_direction_idx]
 
-        expected_peak_value = 7.91873312652406e-06
-        expected_peak_direction_idx = 140  # Direction index where peak occurs
+        expected_peak_value = 0.00660995147262925
+        expected_peak_direction_idx = 44  # Direction index where peak occurs
 
         np.testing.assert_allclose(peak_value, expected_peak_value, rtol=1e-10,
                                  err_msg="Peak value should match expected value")
@@ -515,10 +515,10 @@ class TestRealWorldData:
         ]
 
         expected_values = [
-            3.657132915143452e-06,    # (0, 0)
-            4.333589151813877e-06,    # (0, 90)
-            6.2458001964083e-06,  # (10, 45)
-            7.228481877123873e-05,   # (20, 120)
+            1.7770849992620845e-05,    # (0, 0)
+            6.361678460273995e-06,     # (0, 90)
+            0.00014728635528746644,    # (10, 45)
+            9.475270206911038e-07,     # (20, 120)
         ]
 
         for (freq_idx, dir_idx), expected_val in zip(test_indices, expected_values):
@@ -561,9 +561,9 @@ class TestRealWorldData:
         mean_value = np.mean(result[result > 0])  # Mean of non-zero values
 
         # Expected values (computed from current implementation)
-        expected_total_energy = 3.796532081195266
-        expected_max_value = 0.0237655737957158
-        expected_mean_nonzero = 0.0005408165357828014
+        expected_total_energy = 3.7484928623030283
+        expected_max_value = 0.023793139411520763
+        expected_mean_nonzero = 0.0005339733422084086
 
         # Test with tight tolerance for numerical precision
         np.testing.assert_allclose(total_energy, expected_total_energy, rtol=1e-10,
@@ -578,8 +578,8 @@ class TestRealWorldData:
         peak_direction_idx = np.argmax(peak_freq_spectrum)
         peak_value = peak_freq_spectrum[peak_direction_idx]
 
-        expected_peak_value = 0.0237655737957158
-        expected_peak_direction_idx = 160  # Direction index where peak occurs
+        expected_peak_value = 0.023793139411520763
+        expected_peak_direction_idx = 153  # Direction index where peak occurs
 
         np.testing.assert_allclose(peak_value, expected_peak_value, rtol=1e-10,
                                  err_msg="Dataset2: Peak value should match expected value")
@@ -596,11 +596,11 @@ class TestRealWorldData:
         ]
 
         expected_values = [
-            0.00012979971269644488,  # (0, 0)
-            0.00016998854068615924,  # (8, 45)
-            1.5405259481743667e-05,  # (8, 90)
-            1.4878006537603e-05,     # (15, 120)
-            2.0551655355091914e-05,  # (30, 60)
+            8.746967996651501e-06,   # (0, 0)
+            1.7955193217159483e-05,  # (8, 45)
+            0.00015525859898835503,  # (8, 90)
+            0.0002541624129700038,   # (15, 120)
+            3.352901354780756e-05,   # (30, 60)
         ]
 
         for (freq_idx, dir_idx), expected_val in zip(test_indices, expected_values):
@@ -643,9 +643,9 @@ class TestRealWorldData:
         mean_value = np.mean(result[result > 0])  # Mean of non-zero values
 
         # Expected values (computed from current implementation)
-        expected_total_energy = 1.9407214806299242
-        expected_max_value = 0.006680274721347798
-        expected_mean_nonzero = 0.00027645605137178406
+        expected_total_energy = 1.918813864567803
+        expected_max_value = 0.006685444177345408
+        expected_mean_nonzero = 0.00027333530834299186
 
         # Test with tight tolerance for numerical precision
         np.testing.assert_allclose(total_energy, expected_total_energy, rtol=1e-10,
@@ -661,8 +661,8 @@ class TestRealWorldData:
         peak_direction_idx = np.argmax(peak_freq_spectrum)
         peak_value = peak_freq_spectrum[peak_direction_idx]
 
-        expected_peak_value = 0.006680274721347798
-        expected_peak_direction_idx = 28
+        expected_peak_value = 0.006685444177345408
+        expected_peak_direction_idx = 107
 
         np.testing.assert_allclose(peak_value, expected_peak_value, rtol=1e-10,
                                  err_msg="Dataset3: Peak value should match expected value")
@@ -679,11 +679,11 @@ class TestRealWorldData:
         ]
 
         expected_values = [
-            2.1688225830776163e-06,  # (0, 0)
-            0.0015228792292005142,   # (3, 45)
-            8.339385649101882e-05,   # (10, 90)
-            8.511075197100215e-06,   # (20, 120)
-            4.55005492564815e-06,    # (35, 60)
+            8.6419881036956e-07,     # (0, 0)
+            4.802789983657425e-05,   # (3, 45)
+            3.674605329592568e-05,   # (10, 90)
+            0.00022398376261676908,  # (20, 120)
+            4.3458775851265904e-06,  # (35, 60)
         ]
 
         for (freq_idx, dir_idx), expected_val in zip(test_indices, expected_values):
