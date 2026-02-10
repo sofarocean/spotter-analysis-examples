@@ -3,6 +3,9 @@ from scipy.optimize import root
 from numba import njit
 from dataclasses import dataclass, field
 from scipy.signal import welch, csd
+from typing import Union
+
+Number = Union[int, float, np.number]
 
 ## dataclass definitions
 
@@ -65,6 +68,93 @@ class DirectionalMoments:
             b2=shape_moment(self.b2),
         )
 
+    # --------------------
+    # Algebra helpers
+    # --------------------
+    @staticmethod
+    def _as_array(x: np.ndarray) -> np.ndarray:
+        if x is None:
+            return np.array([])
+        return np.asarray(x)
+
+    @staticmethod
+    def _add_optional(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        a = DirectionalMoments._as_array(a)
+        b = DirectionalMoments._as_array(b)
+
+        if a.size == 0 and b.size == 0:
+            return np.array([])
+        if a.size == 0:
+            return b.copy()
+        if b.size == 0:
+            return a.copy()
+
+        # Broadcast (F,) across time when paired with (T,F)
+        if a.ndim == 1 and b.ndim == 2:
+            if a.shape[0] != b.shape[1]:
+                raise ValueError(f"Incompatible shapes for add: {a.shape} vs {b.shape}")
+            a = np.broadcast_to(a, b.shape)
+        elif a.ndim == 2 and b.ndim == 1:
+            if b.shape[0] != a.shape[1]:
+                raise ValueError(f"Incompatible shapes for add: {a.shape} vs {b.shape}")
+            b = np.broadcast_to(b, a.shape)
+
+        if a.shape != b.shape:
+            raise ValueError(f"Incompatible shapes for add: {a.shape} vs {b.shape}")
+
+        return a + b
+
+    @staticmethod
+    def _scale_optional(a: np.ndarray, k: Number) -> np.ndarray:
+        a = DirectionalMoments._as_array(a)
+        if a.size == 0:
+            return np.array([])
+        return a * k
+
+    # --------------------
+    # Operators
+    # --------------------
+    def __add__(self, other: "DirectionalMoments") -> "DirectionalMoments":
+        if not isinstance(other, DirectionalMoments):
+            return NotImplemented
+        return DirectionalMoments(
+            a1=self._add_optional(self.a1, other.a1),
+            b1=self._add_optional(self.b1, other.b1),
+            a2=self._add_optional(self.a2, other.a2),
+            b2=self._add_optional(self.b2, other.b2),
+        )
+
+    def __iadd__(self, other: "DirectionalMoments") -> "DirectionalMoments":
+        if not isinstance(other, DirectionalMoments):
+            return NotImplemented
+        self.a1 = self._add_optional(self.a1, other.a1)
+        self.b1 = self._add_optional(self.b1, other.b1)
+        self.a2 = self._add_optional(self.a2, other.a2)
+        self.b2 = self._add_optional(self.b2, other.b2)
+        return self
+
+    def __mul__(self, k: Number) -> "DirectionalMoments":
+        if not isinstance(k, (int, float, np.number)):
+            return NotImplemented
+        return DirectionalMoments(
+            a1=self._scale_optional(self.a1, k),
+            b1=self._scale_optional(self.b1, k),
+            a2=self._scale_optional(self.a2, k),
+            b2=self._scale_optional(self.b2, k),
+        )
+
+    def __rmul__(self, k: Number) -> "DirectionalMoments":
+        return self.__mul__(k)
+
+    def __imul__(self, k: Number) -> "DirectionalMoments":
+        if not isinstance(k, (int, float, np.number)):
+            return NotImplemented
+        self.a1 = self._scale_optional(self.a1, k)
+        self.b1 = self._scale_optional(self.b1, k)
+        self.a2 = self._scale_optional(self.a2, k)
+        self.b2 = self._scale_optional(self.b2, k)
+        return self
+
 @dataclass
 class Spectrum:
     frequency: np.ndarray
@@ -126,6 +216,135 @@ class Spectrum:
 
         # Directional moments: assume it's a list of dicts or similar
         self.directional_moments.append(other.directional_moments)
+
+    def _require_same_frequency(self, other: "Spectrum") -> None:
+        if not np.array_equal(self.frequency, other.frequency):
+            raise ValueError("Frequencies must match to combine spectra.")
+
+    @staticmethod
+    def _as_array(x: np.ndarray) -> np.ndarray:
+        # normalize None-like / scalar-ish into ndarray
+        if x is None:
+            return np.array([])
+        return np.asarray(x)
+
+    @staticmethod
+    def _add_optional(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        """
+        Add arrays if both non-empty; otherwise return the non-empty one (copy).
+        Supports:
+          - (F,) + (F,)
+          - (T,F) + (T,F)
+          - (T,F) + (F,)  (broadcast across time)
+          - (F,) + (T,F)  (broadcast across time)
+        """
+        a = Spectrum._as_array(a)
+        b = Spectrum._as_array(b)
+
+        if a.size == 0 and b.size == 0:
+            return np.array([])
+        if a.size == 0:
+            return b.copy()
+        if b.size == 0:
+            return a.copy()
+
+        # If either is 1D and the other is 2D (time-stacked), broadcast 1D across time.
+        if a.ndim == 1 and b.ndim == 2:
+            if a.shape[0] != b.shape[1]:
+                raise ValueError(f"Incompatible shapes for add: {a.shape} vs {b.shape}")
+            a = np.broadcast_to(a, b.shape)
+        elif a.ndim == 2 and b.ndim == 1:
+            if b.shape[0] != a.shape[1]:
+                raise ValueError(f"Incompatible shapes for add: {a.shape} vs {b.shape}")
+            b = np.broadcast_to(b, a.shape)
+
+        if a.shape != b.shape:
+            raise ValueError(f"Incompatible shapes for add: {a.shape} vs {b.shape}")
+        return a + b
+
+    @staticmethod
+    def _scale_optional(a: np.ndarray, k: Number) -> np.ndarray:
+        a = Spectrum._as_array(a)
+        if a.size == 0:
+            return np.array([])
+        return a * k
+
+    def __add__(self, other: "Spectrum") -> "Spectrum":
+        if not isinstance(other, Spectrum):
+            return NotImplemented
+        self._require_same_frequency(other)
+
+        out = Spectrum(
+            frequency=self.frequency.copy(),
+            ezz=self._add_optional(self.ezz, other.ezz),
+            time=self.time.copy() if self.time.size else np.array([]),
+            direction=self.direction.copy() if self.direction.size else np.array([]),
+            exx=self._add_optional(self.exx, other.exx),
+            eyy=self._add_optional(self.eyy, other.eyy),
+            enn=self._add_optional(self.enn, other.enn),
+            cxy=self._add_optional(self.cxy, other.cxy),
+            czn=self._add_optional(self.czn, other.czn),
+            qxz=self._add_optional(self.qxz, other.qxz),
+            qyz=self._add_optional(self.qyz, other.qyz),
+            directional_moments=self.directional_moments + other.directional_moments,  # metadata: keep left operand's
+            directional_spectra=self._add_optional(self.directional_spectra, other.directional_spectra),
+        )
+        return out
+
+    def __iadd__(self, other: "Spectrum") -> "Spectrum":
+        if not isinstance(other, Spectrum):
+            return NotImplemented
+        self._require_same_frequency(other)
+
+        self.ezz = self._add_optional(self.ezz, other.ezz)
+        self.exx = self._add_optional(self.exx, other.exx)
+        self.eyy = self._add_optional(self.eyy, other.eyy)
+        self.enn = self._add_optional(self.enn, other.enn)
+        self.cxy = self._add_optional(self.cxy, other.cxy)
+        self.czn = self._add_optional(self.czn, other.czn)
+        self.qxz = self._add_optional(self.qxz, other.qxz)
+        self.qyz = self._add_optional(self.qyz, other.qyz)
+        self.directional_spectra = self._add_optional(self.directional_spectra, other.directional_spectra)
+        return self
+
+    def __mul__(self, k: Number) -> "Spectrum":
+        if not isinstance(k, (int, float, np.number)):
+            return NotImplemented
+
+        out = Spectrum(
+            frequency=self.frequency.copy(),
+            ezz=self._scale_optional(self.ezz, k),
+            time=self.time.copy() if self.time.size else np.array([]),
+            direction=self.direction.copy() if self.direction.size else np.array([]),
+            exx=self._scale_optional(self.exx, k),
+            eyy=self._scale_optional(self.eyy, k),
+            enn=self._scale_optional(self.enn, k),
+            cxy=self._scale_optional(self.cxy, k),
+            czn=self._scale_optional(self.czn, k),
+            qxz=self._scale_optional(self.qxz, k),
+            qyz=self._scale_optional(self.qyz, k),
+            directional_moments=self.directional_moments * k,  # metadata: unchanged
+            directional_spectra=self._scale_optional(self.directional_spectra, k),
+        )
+        return out
+
+    def __rmul__(self, k: Number) -> "Spectrum":
+        return self.__mul__(k)
+
+    def __imul__(self, k: Number) -> "Spectrum":
+        if not isinstance(k, (int, float, np.number)):
+            return NotImplemented
+
+        self.ezz = self._scale_optional(self.ezz, k)
+        self.exx = self._scale_optional(self.exx, k)
+        self.eyy = self._scale_optional(self.eyy, k)
+        self.enn = self._scale_optional(self.enn, k)
+        self.cxy = self._scale_optional(self.cxy, k)
+        self.czn = self._scale_optional(self.czn, k)
+        self.qxz = self._scale_optional(self.qxz, k)
+        self.qyz = self._scale_optional(self.qyz, k)
+        self.directional_spectra = self._scale_optional(self.directional_spectra, k)
+        return self
 
 
 def custom_hann(N): # from Pieter in slack thread
