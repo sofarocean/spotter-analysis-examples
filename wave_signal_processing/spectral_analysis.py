@@ -19,13 +19,27 @@ class Displacement:
 
 @dataclass
 class DirectionalMoments:
+    """
+    Container for directional moment arrays (typically a1, b1, a2, b2).
+
+    Notes:
+    - These are usually *derived* (normalized) quantities, so they generally should
+      NOT be added or scaled directly. Recompute them from averaged spectra instead.
+    """
     a1: np.ndarray = field(default_factory=lambda: np.array([]))
     b1: np.ndarray = field(default_factory=lambda: np.array([]))
     a2: np.ndarray = field(default_factory=lambda: np.array([]))
     b2: np.ndarray = field(default_factory=lambda: np.array([]))
 
-    def append(self, other: 'DirectionalMoments') -> None:
+    def append(self, other: "DirectionalMoments") -> None:
+        """
+        Append another DirectionalMoments object along the leading (time/segment) axis.
+        Allows mixing 1D (F,) and 2D (T,F) arrays by promoting 1D to (1,F).
+        """
         def normalize_array(x: np.ndarray) -> np.ndarray:
+            x = np.asarray(x)
+            if x.size == 0:
+                return x
             if x.ndim == 0:
                 return np.array([x])
             if x.ndim == 1:
@@ -33,14 +47,20 @@ class DirectionalMoments:
             return x
 
         def concat(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+            a = np.asarray(a)
+            b = np.asarray(b)
+
             if a.size == 0:
                 return normalize_array(b)
             if b.size == 0:
                 return normalize_array(a)
+
             a_norm = normalize_array(a)
             b_norm = normalize_array(b)
+
             if a_norm.shape[1:] != b_norm.shape[1:]:
                 raise ValueError(f"Incompatible shapes: {a.shape} vs {b.shape}")
+
             return np.concatenate((a_norm, b_norm), axis=0)
 
         self.a1 = concat(self.a1, other.a1)
@@ -50,16 +70,20 @@ class DirectionalMoments:
 
     def reshape_for_solver(self) -> "DirectionalMoments":
         """
-        Reshapes all directional moment arrays to 2D shape [n_points, n_frequencies]
+        Reshape all moment arrays to 2D shape [n_points, n_frequencies].
+        - (F,)     -> (1,F)
+        - (T,F)    -> (T,F)
+        - (...,F)  -> (-1,F)  (flatten leading dims)
         """
-        def shape_moment(arr):
-            if arr.ndim == 1:
-                return arr[None, :]  # Add leading axis
-            elif arr.ndim == 2:
+        def shape_moment(arr: np.ndarray) -> np.ndarray:
+            arr = np.asarray(arr)
+            if arr.size == 0:
                 return arr
-            else:
-                # Flatten leading dims, preserve frequency axis
-                return arr.reshape(-1, arr.shape[-1])
+            if arr.ndim == 1:
+                return arr[None, :]
+            if arr.ndim == 2:
+                return arr
+            return arr.reshape(-1, arr.shape[-1])
 
         return DirectionalMoments(
             a1=shape_moment(self.a1),
@@ -68,92 +92,7 @@ class DirectionalMoments:
             b2=shape_moment(self.b2),
         )
 
-    # --------------------
-    # Algebra helpers
-    # --------------------
-    @staticmethod
-    def _as_array(x: np.ndarray) -> np.ndarray:
-        if x is None:
-            return np.array([])
-        return np.asarray(x)
 
-    @staticmethod
-    def _add_optional(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-        a = DirectionalMoments._as_array(a)
-        b = DirectionalMoments._as_array(b)
-
-        if a.size == 0 and b.size == 0:
-            return np.array([])
-        if a.size == 0:
-            return b.copy()
-        if b.size == 0:
-            return a.copy()
-
-        # Broadcast (F,) across time when paired with (T,F)
-        if a.ndim == 1 and b.ndim == 2:
-            if a.shape[0] != b.shape[1]:
-                raise ValueError(f"Incompatible shapes for add: {a.shape} vs {b.shape}")
-            a = np.broadcast_to(a, b.shape)
-        elif a.ndim == 2 and b.ndim == 1:
-            if b.shape[0] != a.shape[1]:
-                raise ValueError(f"Incompatible shapes for add: {a.shape} vs {b.shape}")
-            b = np.broadcast_to(b, a.shape)
-
-        if a.shape != b.shape:
-            raise ValueError(f"Incompatible shapes for add: {a.shape} vs {b.shape}")
-
-        return a + b
-
-    @staticmethod
-    def _scale_optional(a: np.ndarray, k: Number) -> np.ndarray:
-        a = DirectionalMoments._as_array(a)
-        if a.size == 0:
-            return np.array([])
-        return a * k
-
-    # --------------------
-    # Operators
-    # --------------------
-    def __add__(self, other: "DirectionalMoments") -> "DirectionalMoments":
-        if not isinstance(other, DirectionalMoments):
-            return NotImplemented
-        return DirectionalMoments(
-            a1=self._add_optional(self.a1, other.a1),
-            b1=self._add_optional(self.b1, other.b1),
-            a2=self._add_optional(self.a2, other.a2),
-            b2=self._add_optional(self.b2, other.b2),
-        )
-
-    def __iadd__(self, other: "DirectionalMoments") -> "DirectionalMoments":
-        if not isinstance(other, DirectionalMoments):
-            return NotImplemented
-        self.a1 = self._add_optional(self.a1, other.a1)
-        self.b1 = self._add_optional(self.b1, other.b1)
-        self.a2 = self._add_optional(self.a2, other.a2)
-        self.b2 = self._add_optional(self.b2, other.b2)
-        return self
-
-    def __mul__(self, k: Number) -> "DirectionalMoments":
-        if not isinstance(k, (int, float, np.number)):
-            return NotImplemented
-        return DirectionalMoments(
-            a1=self._scale_optional(self.a1, k),
-            b1=self._scale_optional(self.b1, k),
-            a2=self._scale_optional(self.a2, k),
-            b2=self._scale_optional(self.b2, k),
-        )
-
-    def __rmul__(self, k: Number) -> "DirectionalMoments":
-        return self.__mul__(k)
-
-    def __imul__(self, k: Number) -> "DirectionalMoments":
-        if not isinstance(k, (int, float, np.number)):
-            return NotImplemented
-        self.a1 = self._scale_optional(self.a1, k)
-        self.b1 = self._scale_optional(self.b1, k)
-        self.a2 = self._scale_optional(self.a2, k)
-        self.b2 = self._scale_optional(self.b2, k)
-        return self
 
 @dataclass
 class Spectrum:
@@ -274,9 +213,11 @@ class Spectrum:
             return NotImplemented
         self._require_same_frequency(other)
 
+        ezz_sum = self._add_optional(self.ezz, other.ezz)
+
         out = Spectrum(
             frequency=self.frequency.copy(),
-            ezz=self._add_optional(self.ezz, other.ezz),
+            ezz=ezz_sum,
             time=self.time.copy() if self.time.size else np.array([]),
             direction=self.direction.copy() if self.direction.size else np.array([]),
             exx=self._add_optional(self.exx, other.exx),
@@ -286,7 +227,11 @@ class Spectrum:
             czn=self._add_optional(self.czn, other.czn),
             qxz=self._add_optional(self.qxz, other.qxz),
             qyz=self._add_optional(self.qyz, other.qyz),
-            directional_moments=self.directional_moments + other.directional_moments,  # metadata: keep left operand's
+            directional_moments=self.directional_moments.weighted_combine(
+                other.directional_moments,
+                w_self=self.ezz,
+                w_other=other.ezz,
+            ),
             directional_spectra=self._add_optional(self.directional_spectra, other.directional_spectra),
         )
         return out
@@ -311,7 +256,7 @@ class Spectrum:
         if not isinstance(k, (int, float, np.number)):
             return NotImplemented
 
-        out = Spectrum(
+        return Spectrum(
             frequency=self.frequency.copy(),
             ezz=self._scale_optional(self.ezz, k),
             time=self.time.copy() if self.time.size else np.array([]),
@@ -323,10 +268,10 @@ class Spectrum:
             czn=self._scale_optional(self.czn, k),
             qxz=self._scale_optional(self.qxz, k),
             qyz=self._scale_optional(self.qyz, k),
-            directional_moments=self.directional_moments * k,  # metadata: unchanged
+            directional_moments=self.directional_moments,
             directional_spectra=self._scale_optional(self.directional_spectra, k),
         )
-        return out
+
 
     def __rmul__(self, k: Number) -> "Spectrum":
         return self.__mul__(k)
