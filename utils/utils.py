@@ -1,38 +1,9 @@
-import os
-import re
 from datetime import datetime
 import time
 import numpy as np
 import pandas as pd
 import math
 
-def find_files_with_string(directory, string, case_sensitive=False):
-    """
-    Returns a list of filenames in the given directory that contain the given string.
-
-    Args:
-        directory (str): Path to the directory to search.
-        string (str): String to search for.
-        case_sensitive (bool): Whether to match case-sensitively. Default is False.
-
-    Returns:
-        List[str]: List of matching filenames.
-    """
-    if not os.path.isdir(directory):
-        raise ValueError(f"'{directory}' is not a valid directory.")
-
-    matches = []
-    for filename in os.listdir(directory):
-        if not case_sensitive:
-            if string in filename.lower():
-                matches.append(filename)
-        else:
-            if string in filename:
-                matches.append(filename)
-
-    sorted_files = sorted(matches, key=lambda x: int(re.search(r'\d+', x).group()))
-
-    return sorted_files
 
 def epoch_to_date_array( epochtime ):
 
@@ -84,21 +55,3 @@ def read_spotter_csv(filename):
     new_df = pd.concat([new_df, data.iloc[:, -ncols:]], axis=1)
 
     return new_df
-
-def generate_date_pairs(start_date, end_date, freq='2W', precision='D'):
-
-    # Convert to pandas Timestamp and generate date range with 2-week frequency
-    dates = pd.date_range(start=start_date, end=end_date, freq=freq)
-
-    # Ensure last date is included if necessary
-    if dates[-1] < pd.to_datetime(end_date):
-        dates = dates.append(pd.DatetimeIndex([pd.to_datetime(end_date)]))
-
-    # Create tuples of 2-week periods
-    date_pairs = [
-        (np.datetime64(dates[i].to_pydatetime(), precision),
-         np.datetime64(dates[i+1].to_pydatetime(), precision))
-        for i in range(len(dates)-1)
-    ]
-
-    return date_pairs
