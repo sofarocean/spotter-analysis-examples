@@ -1,6 +1,6 @@
 import numpy as np
 from dataclasses import dataclass, field
-from wave_signal_processing.spectral_analysis import DirectionalMoments, Spectrum
+from wave_signal_processing.datatypes import DirectionalMoments, Spectrum
 from typing import Union
 
 @dataclass
