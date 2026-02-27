@@ -23,7 +23,7 @@ class Displacement:
             y=df[mapping["y"]].to_numpy(),
             z=df[mapping["z"]].to_numpy(),
             time=df[mapping["time"]].to_numpy(),
-            n=df["n"].to_numpy() if "n" in df.columns else np.array([]),
+            n=df[mapping["n"]].to_numpy() if "n" in mapping else np.array([]),
         )
 
     @classmethod
