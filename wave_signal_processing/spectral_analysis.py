@@ -1,132 +1,8 @@
 import numpy as np
 from scipy.optimize import root
 from numba import njit
-from dataclasses import dataclass, field
 from scipy.signal import welch, csd
-
-## dataclass definitions
-
-@dataclass
-class Displacement:
-    x: np.ndarray
-    y: np.ndarray
-    z: np.ndarray
-    time: np.ndarray
-    n: np.ndarray = field(default_factory=lambda: np.array([]))
-
-@dataclass
-class DirectionalMoments:
-    a1: np.ndarray = field(default_factory=lambda: np.array([]))
-    b1: np.ndarray = field(default_factory=lambda: np.array([]))
-    a2: np.ndarray = field(default_factory=lambda: np.array([]))
-    b2: np.ndarray = field(default_factory=lambda: np.array([]))
-
-    def append(self, other: 'DirectionalMoments') -> None:
-        def normalize_array(x: np.ndarray) -> np.ndarray:
-            if x.ndim == 0:
-                return np.array([x])
-            if x.ndim == 1:
-                return x.reshape(1, -1)
-            return x
-
-        def concat(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-            if a.size == 0:
-                return normalize_array(b)
-            if b.size == 0:
-                return normalize_array(a)
-            a_norm = normalize_array(a)
-            b_norm = normalize_array(b)
-            if a_norm.shape[1:] != b_norm.shape[1:]:
-                raise ValueError(f"Incompatible shapes: {a.shape} vs {b.shape}")
-            return np.concatenate((a_norm, b_norm), axis=0)
-
-        self.a1 = concat(self.a1, other.a1)
-        self.b1 = concat(self.b1, other.b1)
-        self.a2 = concat(self.a2, other.a2)
-        self.b2 = concat(self.b2, other.b2)
-
-    def reshape_for_solver(self) -> "DirectionalMoments":
-        """
-        Reshapes all directional moment arrays to 2D shape [n_points, n_frequencies]
-        """
-        def shape_moment(arr):
-            if arr.ndim == 1:
-                return arr[None, :]  # Add leading axis
-            elif arr.ndim == 2:
-                return arr
-            else:
-                # Flatten leading dims, preserve frequency axis
-                return arr.reshape(-1, arr.shape[-1])
-
-        return DirectionalMoments(
-            a1=shape_moment(self.a1),
-            b1=shape_moment(self.b1),
-            a2=shape_moment(self.a2),
-            b2=shape_moment(self.b2),
-        )
-
-@dataclass
-class Spectrum:
-    frequency: np.ndarray
-    ezz: np.ndarray
-    time: np.ndarray = field(default_factory=lambda: np.array([]))
-    direction: np.ndarray = field(default_factory=lambda: np.array([]))
-    exx: np.ndarray = field(default_factory=lambda: np.array([]))
-    eyy: np.ndarray = field(default_factory=lambda: np.array([]))
-    enn: np.ndarray = field(default_factory=lambda: np.array([]))
-    cxy: np.ndarray = field(default_factory=lambda: np.array([]))
-    czn: np.ndarray = field(default_factory=lambda: np.array([]))
-    qxz: np.ndarray = field(default_factory=lambda: np.array([]))
-    qyz: np.ndarray = field(default_factory=lambda: np.array([]))
-    directional_moments: DirectionalMoments = field(default_factory=DirectionalMoments)
-    directional_spectra: np.ndarray = field(default_factory=lambda: np.array([]))
-
-    def append(self, other: 'Spectrum') -> None:
-        """Appends another Spectrum object to this one along the time dimension."""
-        if not np.array_equal(self.frequency, other.frequency):
-            raise ValueError("Frequencies must match to append spectra.")
-
-        def normalize_array(x: np.ndarray, target_ndim: int) -> np.ndarray:
-            """Ensure array is at least `target_ndim` by adding leading dims."""
-            if np.isscalar(x) or x.ndim == 0:
-                x = np.array([x])
-            while x.ndim < target_ndim:
-                x = np.expand_dims(x, axis=0)
-            return x
-
-        def concat(a: np.ndarray, b: np.ndarray, target_ndim: int) -> np.ndarray:
-            """Concatenate a and b along time dimension (axis=0)."""
-            if a.size == 0:
-                return normalize_array(b, target_ndim)
-            if b.size == 0:
-                return normalize_array(a, target_ndim)
-
-            a_norm = normalize_array(a, target_ndim)
-            b_norm = normalize_array(b, target_ndim)
-
-            if a_norm.shape[1:] != b_norm.shape[1:]:
-                raise ValueError(f"Incompatible shapes for concatenation: {a.shape} vs {b.shape}")
-            return np.concatenate((a_norm, b_norm), axis=0)
-
-        # Spectral variables (1D or 2D → stack along time axis)
-        self.ezz = concat(self.ezz, other.ezz, target_ndim=2)
-        self.exx = concat(self.exx, other.exx, target_ndim=2)
-        self.eyy = concat(self.eyy, other.eyy, target_ndim=2)
-        self.enn = concat(self.enn, other.enn, target_ndim=2)
-        self.cxy = concat(self.cxy, other.cxy, target_ndim=2)
-        self.czn = concat(self.czn, other.czn, target_ndim=2)
-        self.qxz = concat(self.qxz, other.qxz, target_ndim=2)
-        self.qyz = concat(self.qyz, other.qyz, target_ndim=2)
-
-        # Time (scalar or 1D → stacked as (T,))
-        self.time = concat(self.time, other.time, target_ndim=1)
-
-        # Directional spectra (2D or 3D → stacked along time axis)
-        self.directional_spectra = concat(self.directional_spectra, other.directional_spectra, target_ndim=3)
-
-        # Directional moments: assume it's a list of dicts or similar
-        self.directional_moments.append(other.directional_moments)
-
+from wave_signal_processing.datatypes import Spectrum, DirectionalMoments, Displacement
 
 def custom_hann(N): # from Pieter in slack thread
     n = np.linspace(0,1,N,endpoint=False)
@@ -392,9 +268,9 @@ def compute_full_spectra_from_displacement(
                                                 spectrum.direction)
 
     if spectrum.ezz.ndim == 1: #TODO tomorrow Anna, fix for multidimensional spectra
-        spectrum.time = disp.time[-1]
+        spectrum.time = disp.time[0]
     else:
-        spectrum.time = disp.time[int(segment_length_seconds*fs):-1:int(segment_length_seconds*fs)]
+        spectrum.time = disp.time[0:-(int(segment_length_seconds*fs)):int(segment_length_seconds*fs)]
 
     return spectrum
 
