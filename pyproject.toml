@@ -8,6 +8,14 @@ version = "0.1.0"
 description = "Reusable utility functions for internal projects"
 readme = "README.md"
 requires-python = ">=3.8"
+dependencies = [
+  "numpy",
+  "pandas",
+  "matplotlib",
+  "pytest",
+  "scipy",
+  "numba"
+  ]
 
 authors = [
   { name = "Anna Savage", email = "anna.savage@sofarocean.com" }
